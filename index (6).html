@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Penetration Log — UPMC Presbyterian</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Source+Sans+3:wght@300;400;500;600&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script>
+  firebase.initializeApp({ databaseURL: "https://firestop-log-default-rtdb.firebaseio.com" });
+  window._db  = firebase.database();
+  window._fdb = {
+    ref:     (db, path) => db.ref(path),
+    set:     (ref, data) => ref.set(data),
+    onValue: (ref, cb, err) => { ref.on('value', cb, err); return () => ref.off('value', cb); },
+    remove:  (ref) => ref.remove()
+  };
+  window._firebaseReady = true;
+</script>
+
+<style>
+:root {
+  --navy:#0A1628; --navy2:#0F1F3D;
+  --red:#B22234; --red2:#CC2A3E; --crimson:#8B1A26;
+  --white:#F5F5F0; --offwhite:#E8E4DC;
+  --gold:#C9A84C; --gold2:#E8C96A;
+  --blue:#1B3A6B;
+  --border:#1E3055; --border2:#2A4070;
+  --muted:#5A7090; --text:#B8C8DC; --bright:#F0EDE8;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:var(--navy);color:var(--text);
+  font-family:'Source Sans 3',sans-serif;font-size:13px;min-height:100vh;
+  background-image:
+    repeating-linear-gradient(0deg,transparent,transparent 28px,rgba(255,255,255,0.012) 28px,rgba(255,255,255,0.012) 29px),
+    radial-gradient(ellipse at 100% 0%,rgba(178,34,52,0.12) 0%,transparent 50%),
+    radial-gradient(ellipse at 0% 100%,rgba(26,58,107,0.2) 0%,transparent 50%);
+}
+
+/* OFFLINE BANNER */
+.offline-banner{display:none;background:var(--red);color:#fff;text-align:center;padding:6px;font-family:'Source Code Pro',monospace;font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;}
+.offline-banner.show{display:block;}
+
+/* SYNC BAR */
+.sync-bar{background:#060D1A;border-bottom:1px solid var(--border);padding:5px 20px;display:flex;align-items:center;gap:8px;font-family:'Source Code Pro',monospace;font-size:0.62rem;letter-spacing:0.1em;}
+.sync-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;transition:background 0.3s;}
+.sync-dot.connected{background:#3DAA52;box-shadow:0 0 6px #3DAA52;}
+.sync-dot.syncing{background:var(--gold2);box-shadow:0 0 6px var(--gold2);}
+.sync-dot.error{background:var(--red);}
+.sync-dot.offline{background:var(--muted);}
+.sync-label{color:var(--muted);}
+.sync-time{margin-left:auto;color:#2A3A50;}
+
+/* HEADER */
+.header{padding:0;display:flex;align-items:stretch;justify-content:space-between;flex-wrap:wrap;position:relative;overflow:hidden;min-height:96px;border-bottom:4px solid var(--gold);}
+.header::before{content:'';position:absolute;inset:0;background:linear-gradient(105deg,#8B1A26 0%,#B22234 20%,#CC2A3E 38%,#1B3A6B 50%,#0F2040 65%,#0A1628 100%);z-index:0;}
+.header::after{content:'★  ★  ★  ★  ★  ★  ★  ★  ★  ★  ★  ★  ★';position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:0.55rem;letter-spacing:0.3em;color:rgba(232,201,106,0.15);z-index:1;pointer-events:none;}
+.header-left{position:relative;z-index:2;padding:16px 24px 14px;}
+.header-eyebrow{font-family:'Source Code Pro',monospace;font-size:0.6rem;letter-spacing:0.25em;text-transform:uppercase;color:rgba(232,201,106,0.7);margin-bottom:5px;}
+.header-title{font-family:'Oswald',sans-serif;font-size:1.7rem;font-weight:700;letter-spacing:0.06em;line-height:1;color:var(--white);text-shadow:0 2px 12px rgba(0,0,0,0.5),0 0 30px rgba(178,34,52,0.3);}
+.header-meta{font-size:0.78rem;color:rgba(232,201,106,0.55);margin-top:6px;display:flex;gap:16px;flex-wrap:wrap;}
+.header-right{position:relative;z-index:2;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:16px 20px 14px;}
+.header-divider{position:absolute;left:48%;top:0;bottom:0;width:3px;background:linear-gradient(180deg,transparent 0%,var(--gold) 30%,var(--gold) 70%,transparent 100%);z-index:3;opacity:0.4;}
+.hdr-btn{font-family:'Oswald',sans-serif;font-size:0.72rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:8px 14px;cursor:pointer;border:none;transition:all 0.15s;white-space:nowrap;}
+.hdr-btn.primary{background:var(--gold);color:var(--navy);border:1px solid var(--gold2);}
+.hdr-btn.secondary{background:rgba(255,255,255,0.08);color:var(--offwhite);border:1px solid rgba(255,255,255,0.2);}
+.hdr-btn.danger{background:rgba(178,34,52,0.2);color:#EE8888;border:1px solid rgba(178,34,52,0.4);}
+.hdr-btn:hover{opacity:0.85;transform:translateY(-1px);}
+
+/* DATE BAR */
+.datebar{background:#080F1E;border-bottom:2px solid var(--border);padding:10px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;border-top:1px solid rgba(201,168,76,0.15);}
+.datebar label{font-family:'Source Code Pro',monospace;font-size:0.6rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);}
+.datebar input{background:rgba(255,255,255,0.05);border:1px solid var(--border2);color:var(--bright);font-family:'Source Code Pro',monospace;font-size:0.8rem;padding:5px 10px;outline:none;}
+.datebar input:focus{border-color:var(--gold);}
+.datebar-sep{color:var(--border2);}
+.main{padding:16px 20px;}
+
+/* TABS */
+.installer-bar{display:flex;flex-wrap:wrap;border-bottom:2px solid var(--border);margin-bottom:2px;background:linear-gradient(90deg,rgba(178,34,52,0.08) 0%,rgba(26,58,107,0.12) 100%);}
+.inst-tab{font-family:'Oswald',sans-serif;font-size:0.72rem;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);padding:9px 14px;cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap;transition:all 0.15s;}
+.inst-tab:hover{color:var(--text);}
+.inst-tab.active{color:var(--gold2);border-bottom-color:var(--gold);text-shadow:0 0 8px rgba(232,201,106,0.4);}
+.tab-count{font-size:0.55rem;background:var(--gold);color:var(--navy);border-radius:8px;padding:1px 5px;margin-left:5px;font-weight:700;vertical-align:middle;}
+.inst-panel{display:none;}
+.inst-panel.active{display:block;}
+
+/* NAME ROW */
+.inst-name-row{background:linear-gradient(90deg,rgba(178,34,52,0.1) 0%,rgba(26,58,107,0.15) 100%);padding:10px 14px;display:flex;align-items:center;gap:14px;margin-bottom:2px;border-left:3px solid var(--gold);border-bottom:1px solid var(--border);}
+.inst-name-row label{font-family:'Source Code Pro',monospace;font-size:0.6rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);white-space:nowrap;}
+.inst-name-input{background:transparent;border:none;border-bottom:1px solid var(--border2);color:var(--bright);font-family:'Oswald',sans-serif;font-size:1rem;font-weight:500;letter-spacing:0.06em;padding:2px 6px;outline:none;width:220px;}
+.inst-name-input:focus{border-bottom-color:var(--gold);}
+
+/* TABLE */
+.log-wrap{overflow-x:auto;margin-bottom:2px;}
+.log-table{width:100%;border-collapse:collapse;min-width:600px;}
+.log-table th{background:#060D1A;font-family:'Source Code Pro',monospace;font-size:0.6rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);padding:8px 10px;text-align:left;border-bottom:2px solid var(--gold);white-space:nowrap;}
+.log-table td{padding:4px 6px;border-bottom:1px solid var(--border);vertical-align:middle;}
+.log-table tr:hover td{background:rgba(201,168,76,0.03);}
+.row-num{font-family:'Source Code Pro',monospace;font-size:0.65rem;color:var(--muted);text-align:center;}
+.log-table input{background:transparent;border:1px solid transparent;color:var(--bright);font-family:'Source Sans 3',sans-serif;font-size:0.8rem;padding:4px 6px;width:100%;outline:none;transition:border 0.1s;}
+.log-table input:focus{border-color:var(--border2);background:rgba(255,255,255,0.03);}
+input[type=number]{text-align:center;}
+
+/* ROW COLORS */
+.type-sns-wall    {border-left:3px solid #4A90E2 !important;}
+.type-lci-wall    {border-left:3px solid #CC2A3E !important;}
+.type-blank-sns   {border-left:3px solid #27AE60 !important;}
+.type-blank-lci   {border-left:3px solid #E8A030 !important;}
+.type-jbox-sns    {border-left:3px solid #5B8DD9 !important;}
+.type-jbox-lci    {border-left:3px solid #D45050 !important;}
+.type-annular-sns {border-left:3px solid #3AAA60 !important;}
+.type-annular-lci {border-left:3px solid #D47820 !important;}
+.type-sns-sealant {border-left:3px solid #7BA7D4 !important;}
+.type-lci-sealant {border-left:3px solid #D47B5A !important;}
+
+.del-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.9rem;padding:3px 8px;transition:color 0.1s;}
+.del-btn:hover{color:var(--red2);}
+.type-pick-btn{background:none;border:1px solid var(--border2);color:var(--bright);font-family:'Source Sans 3',sans-serif;font-size:0.8rem;padding:6px 10px;cursor:pointer;width:100%;text-align:left;transition:border-color 0.1s;}
+.type-pick-btn:hover{border-color:var(--gold);}
+.add-row-btn{width:100%;background:rgba(201,168,76,0.05);border:1px dashed rgba(201,168,76,0.2);color:var(--muted);font-family:'Oswald',sans-serif;font-size:0.72rem;letter-spacing:0.1em;text-transform:uppercase;padding:10px;cursor:pointer;transition:all 0.15s;margin-bottom:12px;}
+.add-row-btn:hover{color:var(--gold2);border-color:var(--gold);background:rgba(201,168,76,0.08);}
+
+/* TOTALS */
+.totals-section{background:rgba(26,58,107,0.2);border-top:2px solid rgba(201,168,76,0.3);padding:14px 16px;margin-bottom:12px;}
+.totals-title{font-family:'Oswald',sans-serif;font-size:0.75rem;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--gold);margin-bottom:10px;}
+.totals-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px;}
+.total-item{background:rgba(0,0,0,0.25);padding:8px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px;border:1px solid var(--border);}
+.total-label{font-size:0.75rem;color:var(--text);line-height:1.3;}
+.total-val{font-family:'Oswald',sans-serif;font-size:1.2rem;font-weight:700;flex-shrink:0;color:var(--gold2);}
+
+/* SUMMARY */
+.summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:12px;}
+@media(max-width:600px){.summary-grid{grid-template-columns:1fr;}}
+.sum-card{background:rgba(15,31,61,0.8);padding:14px 16px;border:1px solid var(--border);}
+.sum-card-title{font-family:'Oswald',sans-serif;font-size:0.78rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--gold);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border);}
+.sum-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px dotted var(--border);font-size:0.8rem;}
+.sum-row:last-child{border-bottom:none;}
+.sum-row-val{font-family:'Oswald',sans-serif;font-size:1rem;font-weight:600;color:var(--gold2);}
+.job-totals-bar{background:rgba(10,22,40,0.9);padding:14px 16px;border-top:2px solid var(--gold);}
+.export-btn{font-family:'Oswald',sans-serif;font-size:0.72rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:8px 14px;cursor:pointer;background:rgba(42,120,58,0.2);color:#6ECC80;border:1px solid rgba(42,120,58,0.4);white-space:nowrap;transition:all 0.15s;}
+.export-btn:hover{background:rgba(42,120,58,0.35);}
+
+/* TYPE PICKER */
+.picker-sheet{background:var(--navy2);border-top:2px solid var(--gold);padding:16px;max-height:80vh;overflow-y:auto;}
+.picker-header{font-family:'Oswald',sans-serif;font-size:0.8rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;}
+.picker-close{background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;padding:2px 8px;}
+.picker-btn{width:100%;background:rgba(0,0,0,0.3);border:none;border-left:4px solid #555;color:var(--bright);font-family:'Source Sans 3',sans-serif;font-size:0.95rem;padding:14px 16px;text-align:left;cursor:pointer;margin-bottom:4px;display:block;transition:background 0.1s;}
+.picker-btn:hover,.picker-btn:active{background:rgba(201,168,76,0.1);}
+
+/* LOADING */
+.loading-overlay{position:fixed;inset:0;background:rgba(6,13,26,0.95);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;gap:16px;}
+.loading-spinner{width:36px;height:36px;border:3px solid var(--border2);border-top-color:var(--gold);border-radius:50%;animation:spin 0.8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-text{font-family:'Source Code Pro',monospace;font-size:0.7rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);}
+
+@media print{
+  .sync-bar,.hdr-btn,.add-row-btn,.del-btn,.datebar,.loading-overlay,.offline-banner{display:none;}
+  body{background:white;color:black;}
+  .log-table th{background:#eee !important;color:#333 !important;-webkit-print-color-adjust:exact;}
+  .inst-panel{display:block !important;page-break-after:always;}
+  .inst-tab,.installer-bar{display:none;}
+}
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loading-overlay" style="display:none">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">Connecting to database...</div>
+</div>
+
+<div class="offline-banner" id="offline-banner">⚠ No internet connection — entries may not be saving</div>
+
+<div class="sync-bar">
+  <div class="sync-dot offline" id="sync-dot"></div>
+  <span class="sync-label" id="sync-label">Connecting...</span>
+  <span class="sync-time" id="sync-time"></span>
+</div>
+
+<div class="header">
+  <div class="header-divider"></div>
+  <div class="header-left">
+    <div class="header-eyebrow">🔥 KIM Industries · Firestop Division · Daily Penetration Log</div>
+    <div class="header-title">★ UPMC PRESBYTERIAN</div>
+    <div class="header-meta"><span>Job #5063</span><span>Pittsburgh, PA</span></div>
+  </div>
+  <div class="header-right">
+    <button class="hdr-btn secondary" onclick="showSummary()">📊 Daily Summary</button>
+    <button class="hdr-btn danger" onclick="clearDay()">🗑 Clear Day</button>
+    <button class="hdr-btn primary" onclick="window.print()">🖨 Print / PDF</button>
+  </div>
+</div>
+
+<div class="datebar">
+  <label>Date</label>
+  <input type="date" id="log-date">
+  <span class="datebar-sep">|</span>
+  <label>Superintendent</label>
+  <input type="text" id="super-name" placeholder="Your name" style="width:170px" oninput="saveMeta()">
+  <span class="datebar-sep">|</span>
+  <label>Shift</label>
+  <input type="text" id="shift-name" placeholder="Day / Night" style="width:110px" oninput="saveMeta()">
+</div>
+
+<div class="main">
+  <div class="installer-bar" id="installer-bar"></div>
+  <div id="installer-panels"></div>
+  <div id="summary-panel" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <div style="font-family:'Oswald',sans-serif;font-size:1rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--bright)">Daily Summary — All Installers</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="export-btn" onclick="exportCSV()">⬇ Export CSV</button>
+        <button class="hdr-btn secondary" onclick="hideSummary()" style="font-size:0.68rem;padding:6px 12px;">← Back</button>
+      </div>
+    </div>
+    <div class="summary-grid" id="summary-content"></div>
+    <div class="job-totals-bar">
+      <div class="sum-card-title" style="margin-bottom:12px;">★ JOB TOTALS — ALL INSTALLERS TODAY</div>
+      <div class="totals-grid" id="job-totals-grid"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── CONSTANTS ─────────────────────────────────────────────────
+const INSTALLERS = 10;
+const ITEM_TYPES = [
+  { key:'sns-wall',      label:'Wall Penetration — SNS',        color:'#4A90E2' },
+  { key:'lci-wall',      label:'Wall Penetration — LCI',        color:'#CC2A3E' },
+  { key:'blank-sns',     label:'Blank Wall Penetration — SNS',  color:'#27AE60' },
+  { key:'blank-lci',     label:'Blank Wall Penetration — LCI',  color:'#E8A030' },
+  { key:'jbox-sns',      label:'Extruded J-Box — SNS',          color:'#5B8DD9' },
+  { key:'jbox-lci',      label:'Extruded J-Box — LCI',          color:'#D45050' },
+  { key:'annular-sns',   label:'Oversized Annular Space — SNS', color:'#3AAA60' },
+  { key:'annular-lci',   label:'Oversized Annular Space — LCI', color:'#D47820' },
+  { key:'sns-sealant',   label:'SpecSeal SNS Sealant Used',     color:'#7BA7D4' },
+  { key:'lci-sealant',   label:'SpecSeal LCI Sealant Used',     color:'#D47B5A' },
+];
+
+// ── STATE ─────────────────────────────────────────────────────
+const state = {
+  rows:      Array.from({length:INSTALLERS}, ()=>[]),
+  names:     Array.from({length:INSTALLERS}, (_,i)=>`Installer ${i+1}`),
+  activeTab: 0,
+};
+
+const TODAY = new Date().toISOString().split('T')[0];
+let saveTimer, isSaving=false, unsubscribe=null, appStarted=false;
+
+// ── OFFLINE DETECTION ─────────────────────────────────────────
+window.addEventListener('online',  ()=>document.getElementById('offline-banner').classList.remove('show'));
+window.addEventListener('offline', ()=>document.getElementById('offline-banner').classList.add('show'));
+if (!navigator.onLine) document.getElementById('offline-banner').classList.add('show');
+
+// ── SYNC STATUS ───────────────────────────────────────────────
+function setSyncStatus(status, msg) {
+  document.getElementById('sync-dot').className = `sync-dot ${status}`;
+  document.getElementById('sync-label').textContent = msg;
+  if (status==='connected') document.getElementById('sync-time').textContent = 'Last sync: '+new Date().toLocaleTimeString();
+}
+
+// ── FIREBASE ──────────────────────────────────────────────────
+function getPath() { return `upmc-5063/${document.getElementById('log-date').value||TODAY}`; }
+
+function saveToFirebase() {
+  if (!window._db || isSaving) return;
+  isSaving = true;
+  setSyncStatus('syncing','Saving...');
+  const {ref,set} = window._fdb;
+  set(ref(window._db, getPath()), {
+    names: state.names,
+    rows:  state.rows,
+    meta:  { super: document.getElementById('super-name').value, shift: document.getElementById('shift-name').value, date: document.getElementById('log-date').value, updated: new Date().toISOString() }
+  }).then(()=>{ setSyncStatus('connected','Saved ✓'); isSaving=false; })
+    .catch(e=>{ setSyncStatus('error','Save failed — check connection'); isSaving=false; console.error(e); });
+}
+
+function debounceSave() { clearTimeout(saveTimer); saveTimer=setTimeout(saveToFirebase,800); }
+function saveMeta() { debounceSave(); }
+
+function loadDate() {
+  if (!window._db) return;
+  setSyncStatus('syncing','Loading...');
+  if (unsubscribe) { unsubscribe(); unsubscribe=null; }
+  const {ref,onValue} = window._fdb;
+  unsubscribe = onValue(ref(window._db, getPath()), snap => {
+    const data = snap.val();
+    if (data) {
+      state.names = data.names || Array.from({length:INSTALLERS},(_,i)=>`Installer ${i+1}`);
+      state.rows  = data.rows  || Array.from({length:INSTALLERS},()=>[]);
+      while (state.names.length<INSTALLERS) state.names.push(`Installer ${state.names.length+1}`);
+      while (state.rows.length <INSTALLERS) state.rows.push([]);
+      if (data.meta) {
+        if (data.meta.super) document.getElementById('super-name').value=data.meta.super;
+        if (data.meta.shift) document.getElementById('shift-name').value=data.meta.shift;
+      }
+    } else {
+      state.names=Array.from({length:INSTALLERS},(_,i)=>`Installer ${i+1}`);
+      state.rows =Array.from({length:INSTALLERS},()=>[]);
+    }
+    renderAllPanels(); renderTabs();
+    setSyncStatus('connected','Live sync active ✓');
+  }, err=>{ setSyncStatus('error','Connection error — check Firebase rules'); console.error(err); });
+}
+
+// ── APP START ─────────────────────────────────────────────────
+function startApp() {
+  if (appStarted) return;
+  appStarted = true;
+  document.getElementById('log-date').value = TODAY;
+  document.getElementById('log-date').addEventListener('change', loadDate);
+  loadDate();
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.getElementById('log-date').value = TODAY;
+  renderAllPanels();
+  renderTabs();
+  const check = setInterval(()=>{
+    if (window._firebaseReady && window._db && window._fdb) { clearInterval(check); startApp(); }
+  }, 100);
+  setTimeout(()=>{ clearInterval(check); if (!appStarted) setSyncStatus('error','Firebase failed to load — refresh page'); }, 10000);
+});
+
+// ── TABS ──────────────────────────────────────────────────────
+function renderTabs() {
+  const bar=document.getElementById('installer-bar');
+  bar.innerHTML='';
+  for (let i=0;i<INSTALLERS;i++) {
+    const count=(state.rows[i]||[]).length;
+    const btn=document.createElement('button');
+    btn.className='inst-tab'+(i===state.activeTab?' active':'');
+    const name=state.names[i]||`Installer ${i+1}`;
+    btn.innerHTML=name+(count>0?` <span class="tab-count">${count}</span>`:'');
+    btn.onclick=()=>switchTab(i);
+    bar.appendChild(btn);
+  }
+}
+
+function switchTab(i) {
+  state.activeTab=i;
+  document.querySelectorAll('.inst-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.inst-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById(`panel-${i}`)?.classList.add('active');
+  document.querySelectorAll('.inst-tab')[i]?.classList.add('active');
+  document.getElementById('summary-panel').style.display='none';
+  document.getElementById('installer-panels').style.display='';
+}
+
+// ── PANELS ────────────────────────────────────────────────────
+function renderAllPanels() {
+  const c=document.getElementById('installer-panels');
+  c.innerHTML='';
+  for (let i=0;i<INSTALLERS;i++) c.appendChild(buildPanel(i));
+  switchTab(state.activeTab);
+}
+
+function buildPanel(i) {
+  const div=document.createElement('div');
+  div.className='inst-panel'+(i===state.activeTab?' active':'');
+  div.id=`panel-${i}`;
+  div.innerHTML=`
+    <div class="inst-name-row">
+      <label>Installer Name</label>
+      <input class="inst-name-input" type="text" value="${state.names[i]}" placeholder="Enter name" oninput="updateName(${i},this.value)">
+      <span style="font-family:'Source Code Pro',monospace;font-size:0.6rem;color:var(--muted);margin-left:auto;letter-spacing:0.1em">INSTALLER ${i+1} OF ${INSTALLERS}</span>
+    </div>`;
+  const wrap=document.createElement('div');
+  wrap.className='log-wrap';
+  wrap.innerHTML=`
+    <table class="log-table">
+      <thead><tr>
+        <th style="width:32px;text-align:center">#</th>
+        <th style="min-width:200px">Item Type</th>
+        <th style="width:65px;text-align:center">Qty</th>
+        <th style="min-width:140px">Floor / Zone / Room</th>
+        <th style="min-width:140px">Notes</th>
+        <th style="width:34px"></th>
+      </tr></thead>
+      <tbody id="tbody-${i}"></tbody>
+    </table>`;
+  div.appendChild(wrap);
+  const addBtn=document.createElement('button');
+  addBtn.className='add-row-btn';
+  addBtn.textContent='+ Add Row';
+  addBtn.onclick=()=>addRow(i);
+  div.appendChild(addBtn);
+  const totDiv=document.createElement('div');
+  totDiv.className='totals-section';
+  totDiv.id=`totals-${i}`;
+  div.appendChild(totDiv);
+  renderRows(i); renderTotals(i);
+  return div;
+}
+
+// ── ROWS ──────────────────────────────────────────────────────
+function addRow(idx) {
+  if (!state.rows[idx]) state.rows[idx]=[];
+  state.rows[idx].push({type:'', location:'', qty:'', notes:''});
+  renderRows(idx); renderTotals(idx); renderTabs(); debounceSave();
+}
+
+function deleteRow(idx, ri) {
+  state.rows[idx].splice(ri,1);
+  renderRows(idx); renderTotals(idx); renderTabs(); debounceSave();
+}
+
+function updateRow(idx, ri, field, val) {
+  if (!state.rows[idx]||!state.rows[idx][ri]) return;
+  state.rows[idx][ri][field]=val;
+  if (field==='type') {
+    const row=document.querySelector(`#tbody-${idx} tr:nth-child(${ri+1})`);
+    if (row) { ITEM_TYPES.forEach(t=>row.classList.remove(`type-${t.key}`)); if(val) row.classList.add(`type-${val}`); }
+  }
+  renderTotals(idx); debounceSave();
+}
+
+function renderRows(idx) {
+  const tbody=document.getElementById(`tbody-${idx}`);
+  if (!tbody) return;
+  tbody.innerHTML='';
+  (state.rows[idx]||[]).forEach((r,ri)=>{
+    const tr=document.createElement('tr');
+    if (r.type) tr.classList.add(`type-${r.type}`);
+    const typeObj=ITEM_TYPES.find(t=>t.key===r.type);
+    const typeLabel=typeObj
+      ?`<span style="color:${typeObj.color};font-weight:600">${typeObj.label}</span>`
+      :`<span style="color:var(--muted)">— Tap to select —</span>`;
+    tr.innerHTML=`
+      <td class="row-num">${ri+1}</td>
+      <td><button class="type-pick-btn" onclick="openTypePicker(${idx},${ri})">${typeLabel}</button></td>
+      <td><input type="number" min="0" value="${r.qty||''}" placeholder="0" oninput="updateRow(${idx},${ri},'qty',this.value)" style="width:56px;text-align:center"></td>
+      <td><input type="text" value="${r.location||''}" placeholder="e.g. 4N / Rm 412" oninput="updateRow(${idx},${ri},'location',this.value)"></td>
+      <td><input type="text" value="${r.notes||''}" placeholder="Notes..." oninput="updateRow(${idx},${ri},'notes',this.value)"></td>
+      <td><button class="del-btn" onclick="deleteRow(${idx},${ri})">✕</button></td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+// ── TYPE PICKER ───────────────────────────────────────────────
+function openTypePicker(idx, ri) {
+  document.getElementById('type-picker-modal')?.remove();
+  const modal=document.createElement('div');
+  modal.id='type-picker-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;flex-direction:column;justify-content:flex-end;';
+  modal.innerHTML=`
+    <div class="picker-sheet">
+      <div class="picker-header">
+        <span>Select Item Type</span>
+        <button class="picker-close" onclick="document.getElementById('type-picker-modal').remove()">✕</button>
+      </div>
+      ${ITEM_TYPES.map(t=>`
+        <button class="picker-btn" style="border-left-color:${t.color}" onclick="pickType(${idx},${ri},'${t.key}')">
+          ${t.label}
+        </button>`).join('')}
+    </div>`;
+  modal.addEventListener('click', e=>{ if(e.target===modal) modal.remove(); });
+  document.body.appendChild(modal);
+}
+
+function pickType(idx, ri, typeKey) {
+  document.getElementById('type-picker-modal')?.remove();
+  updateRow(idx, ri, 'type', typeKey);
+  renderRows(idx);
+}
+
+// ── TOTALS ────────────────────────────────────────────────────
+function calcTotals(idx) {
+  const t={};
+  ITEM_TYPES.forEach(x=>{t[x.key]=0;});
+  (state.rows[idx]||[]).forEach(r=>{ if(r.type) t[r.type]+=(parseInt(r.qty)||0); });
+  return t;
+}
+
+function renderTotals(idx) {
+  const el=document.getElementById(`totals-${idx}`);
+  if (!el) return;
+  const t=calcTotals(idx);
+  const active=ITEM_TYPES.filter(x=>t[x.key]>0);
+  el.innerHTML=`<div class="totals-title">Totals — ${state.names[idx]||`Installer ${idx+1}`}</div>
+    ${active.length
+      ?`<div class="totals-grid">${active.map(x=>`
+          <div class="total-item" style="border-left:3px solid ${x.color}">
+            <div class="total-label">${x.label}</div>
+            <div class="total-val">${t[x.key]}</div>
+          </div>`).join('')}</div>`
+      :`<div style="color:var(--muted);font-size:0.8rem;padding:4px 0;">No entries yet.</div>`}`;
+}
+
+function updateName(i, val) { state.names[i]=val||`Installer ${i+1}`; renderTabs(); renderTotals(i); debounceSave(); }
+
+// ── SUMMARY ───────────────────────────────────────────────────
+function showSummary() {
+  document.getElementById('installer-panels').style.display='none';
+  document.getElementById('summary-panel').style.display='block';
+  const content=document.getElementById('summary-content');
+  const jt={};
+  ITEM_TYPES.forEach(x=>{jt[x.key]=0;});
+  content.innerHTML='';
+  state.rows.forEach((rows,i)=>{
+    if (!rows||!rows.length) return;
+    const t=calcTotals(i);
+    ITEM_TYPES.forEach(x=>{jt[x.key]+=t[x.key];});
+    const active=ITEM_TYPES.filter(x=>t[x.key]>0);
+    if (!active.length) return;
+    const card=document.createElement('div');
+    card.className='sum-card';
+    card.innerHTML=`<div class="sum-card-title">${state.names[i]||`Installer ${i+1}`} — ${rows.length} line${rows.length!==1?'s':''}</div>
+      ${active.map(x=>`<div class="sum-row">
+        <span style="border-left:2px solid ${x.color};padding-left:6px;color:var(--text)">${x.label}</span>
+        <span class="sum-row-val">${t[x.key]}</span>
+      </div>`).join('')}`;
+    content.appendChild(card);
+  });
+  if (!content.children.length) content.innerHTML='<div style="color:var(--muted);padding:20px;font-size:0.85rem;">No entries logged yet.</div>';
+  const activeJob=ITEM_TYPES.filter(x=>jt[x.key]>0);
+  document.getElementById('job-totals-grid').innerHTML=activeJob.length
+    ?activeJob.map(x=>`
+        <div class="total-item" style="border-left:3px solid ${x.color}">
+          <div class="total-label">${x.label}</div>
+          <div class="total-val">${jt[x.key]}</div>
+        </div>`).join('')
+    :'<div style="color:var(--muted);font-size:0.8rem;padding:4px 0;">No entries logged yet.</div>';
+}
+
+function hideSummary() {
+  document.getElementById('summary-panel').style.display='none';
+  document.getElementById('installer-panels').style.display='';
+  switchTab(state.activeTab);
+}
+
+// ── CSV EXPORT ────────────────────────────────────────────────
+function exportCSV() {
+  const date=document.getElementById('log-date').value||TODAY;
+  const sup=document.getElementById('super-name').value||'Unknown';
+  const shift=document.getElementById('shift-name').value||'';
+  let csv=`KIM Industries — UPMC Presbyterian — Job #5063\nDate:,${date}\nSuperintendent:,${sup}\nShift:,${shift}\n\n`;
+  csv+='Installer,Item Type,Qty,Floor/Zone/Room,Notes\n';
+  state.rows.forEach((rows,i)=>{
+    (rows||[]).forEach(r=>{
+      if (!r.type) return;
+      const label=ITEM_TYPES.find(t=>t.key===r.type)?.label||r.type;
+      const name=state.names[i]||`Installer ${i+1}`;
+      csv+=`"${name}","${label}","${r.qty||0}","${r.location||''}","${r.notes||''}"\n`;
+    });
+  });
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`UPMC-5063-${date}.csv`;
+  a.click();
+}
+
+// ── CLEAR DAY ─────────────────────────────────────────────────
+function clearDay() {
+  const input=prompt('⚠ Type CLEAR to delete ALL entries for today.\nThis cannot be undone.');
+  if (input!=='CLEAR') { if(input!==null) alert('Cancelled — you must type CLEAR exactly.'); return; }
+  const input2=prompt('Last chance. Type YES to confirm permanent deletion.');
+  if (input2!=='YES') { if(input2!==null) alert('Cancelled.'); return; }
+  state.rows=Array.from({length:INSTALLERS},()=>[]);
+  state.names=Array.from({length:INSTALLERS},(_,i)=>`Installer ${i+1}`);
+  const {ref,remove}=window._fdb;
+  remove(ref(window._db, getPath()));
+  renderAllPanels(); renderTabs();
+}
+</script>
+</body>
+</html>
