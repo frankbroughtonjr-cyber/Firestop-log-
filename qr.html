@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>QR — UPMC Firestop Log</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Source+Code+Pro&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:#0A1628;min-height:100vh;font-family:'Oswald',sans-serif;
+  overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;
+}
+canvas#fire{position:fixed;left:0;bottom:0;width:100%;pointer-events:none;z-index:1;}
+
+.card{
+  position:relative;z-index:10;
+  background:rgba(8,16,32,0.88);
+  border:1px solid #2A4070;border-top:4px solid #C9A84C;
+  width:min(420px,92vw);padding:30px 28px 26px;
+  backdrop-filter:blur(8px);text-align:center;
+}
+.card.extinguished{border-top-color:#3DAA52;}
+.card::before{
+  content:'';position:absolute;inset:0;pointer-events:none;z-index:0;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36'%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='10' fill='rgba(232,201,106,0.1)' font-family='serif'%3E%E2%98%85%3C/text%3E%3C/svg%3E");
+  background-size:36px 36px;
+}
+.inner{position:relative;z-index:1;}
+
+.eyebrow{font-family:'Source Code Pro',monospace;font-size:0.52rem;letter-spacing:0.22em;text-transform:uppercase;color:rgba(232,201,106,0.55);margin-bottom:6px;}
+.title{font-size:2rem;font-weight:700;letter-spacing:0.06em;color:#F5F5F0;line-height:1;margin-bottom:3px;}
+.sub{font-size:0.7rem;font-weight:400;letter-spacing:0.12em;text-transform:uppercase;color:rgba(232,201,106,0.45);margin-bottom:22px;}
+
+.qr-wrap{
+  display:inline-flex;align-items:center;justify-content:center;
+  background:#F5F5F0;padding:14px;
+  box-shadow:0 0 0 1px #C9A84C,0 0 30px rgba(255,120,0,0.4),0 8px 40px rgba(0,0,0,0.7);
+  margin-bottom:20px;position:relative;transition:box-shadow 0.5s;
+}
+.qr-wrap.doused{box-shadow:0 0 0 1px #3DAA52,0 0 20px rgba(61,170,82,0.4),0 8px 40px rgba(0,0,0,0.7);}
+
+.url-box{background:rgba(0,0,0,0.35);border:1px solid #1E3055;padding:8px 12px;margin-bottom:18px;}
+.url-label{font-family:'Source Code Pro',monospace;font-size:0.46rem;letter-spacing:0.16em;text-transform:uppercase;color:#5A7090;margin-bottom:3px;}
+.url-text{font-family:'Source Code Pro',monospace;font-size:0.7rem;color:#C9A84C;word-break:break-all;}
+
+.stats{display:flex;border:1px solid #1E3055;margin-bottom:22px;}
+.stat{flex:1;padding:10px 4px;text-align:center;border-right:1px solid #1E3055;}
+.stat:last-child{border-right:none;}
+.stat-val{font-size:1.1rem;font-weight:700;color:#E8C96A;line-height:1;}
+.stat-label{font-family:'Source Code Pro',monospace;font-size:0.44rem;letter-spacing:0.1em;text-transform:uppercase;color:#5A7090;margin-top:3px;}
+
+.fire-btn{
+  width:100%;padding:15px;
+  background:linear-gradient(135deg,#8B1A26,#CC2A3E);
+  border:none;color:#F5F5F0;
+  font-family:'Oswald',sans-serif;font-size:1rem;font-weight:700;
+  letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  transition:all 0.2s;
+}
+.fire-btn:hover{background:linear-gradient(135deg,#A01F2E,#DD3346);}
+.fire-btn.doused{background:linear-gradient(135deg,#1A5C2A,#3DAA52);cursor:default;pointer-events:none;}
+.fire-btn .btn-icon{font-size:1.3rem;transition:transform 0.3s;}
+.fire-btn:hover .btn-icon{transform:scale(1.2);}
+
+.status{margin-top:10px;font-family:'Source Code Pro',monospace;font-size:0.56rem;letter-spacing:0.1em;color:#5A7090;text-align:center;min-height:16px;transition:color 0.3s;}
+.status.active{color:rgba(255,120,0,0.7);}
+.status.done{color:#3DAA52;}
+
+.print-row{display:flex;gap:8px;margin-top:14px;}
+.print-btn,.dl-btn{flex:1;padding:9px;background:transparent;border:1px solid #2A4070;color:#5A7090;font-family:'Oswald',sans-serif;font-size:0.65rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;transition:all 0.15s;}
+.print-btn:hover,.dl-btn:hover{border-color:#C9A84C;color:#C9A84C;}
+
+#douse-flash{position:fixed;inset:0;z-index:5;background:rgba(200,240,255,0);pointer-events:none;transition:background 0.08s;}
+#smoke-msg{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0.6);font-size:3rem;font-weight:700;letter-spacing:0.1em;color:rgba(61,170,82,0);text-shadow:0 0 40px rgba(61,170,82,0.5);z-index:20;pointer-events:none;white-space:nowrap;}
+
+@media print{
+  body{background:white;}
+  canvas{display:none;}
+  .card{background:white;border:2px solid #C9A84C;backdrop-filter:none;}
+  .card::before{display:none;}
+  .eyebrow,.url-label,.stat-label,.status{color:#888;}
+  .title{color:#000;}.sub{color:#8B6914;}
+  .url-text,.stat-val{color:#8B6914;}
+  .qr-wrap{box-shadow:none;}
+  .fire-btn,.print-row,.status{display:none;}
+}
+</style>
+</head>
+<body>
+
+<canvas id="fire"></canvas>
+<div id="douse-flash"></div>
+<div id="smoke-msg">🔥 CONTAINED</div>
+
+<div class="card" id="card">
+  <div class="inner">
+    <div class="eyebrow">🔥 KIM Industries · Firestop Division</div>
+    <div class="title">UPMC PRESBYTERIAN</div>
+    <div class="sub">Daily Penetration Log · Job #5063</div>
+
+    <div class="qr-wrap" id="qr-wrap">
+      <div id="qrcode"></div>
+    </div>
+
+    <div class="url-box">
+      <div class="url-label">Scan or visit</div>
+      <div class="url-text">frankbroughtonjr-cyber.github.io/Firestop-log-/</div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-val">25</div><div class="stat-label">Installers</div></div>
+      <div class="stat"><div class="stat-val">Firebase</div><div class="stat-label">Live Sync</div></div>
+      <div class="stat"><div class="stat-val">#5063</div><div class="stat-label">Job No.</div></div>
+    </div>
+
+    <button class="fire-btn" id="fire-btn" onclick="extinguishFire()">
+      <span class="btn-icon">🔥</span>
+      <span id="btn-label">STOP THE FIRE</span>
+    </button>
+    <div class="status active" id="status-line">🔥 Fire is burning — tap to extinguish</div>
+
+    <div class="print-row">
+      <button class="print-btn" onclick="window.print()">🖨 Print</button>
+      <button class="dl-btn" id="dl-btn">⬇ Save PNG</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// QR
+new QRCode(document.getElementById('qrcode'),{
+  text:'https://frankbroughtonjr-cyber.github.io/Firestop-log-/',
+  width:220,height:220,colorDark:'#0A1628',colorLight:'#F5F5F0',
+  correctLevel:QRCode.CorrectLevel.H,
+});
+
+// Download
+document.getElementById('dl-btn').addEventListener('click',()=>{
+  setTimeout(()=>{
+    const src=document.querySelector('#qrcode canvas');
+    if(!src){alert('QR not ready.');return;}
+    const out=document.createElement('canvas');
+    out.width=src.width+60;out.height=src.height+90;
+    const c=out.getContext('2d');
+    c.fillStyle='#0F1F3D';c.fillRect(0,0,out.width,out.height);
+    c.fillStyle='#C9A84C';c.fillRect(0,0,out.width,4);
+    c.drawImage(src,30,18);
+    c.fillStyle='#E8C96A';c.font='bold 13px sans-serif';c.textAlign='center';
+    c.fillText('UPMC PRESBYTERIAN · FIRESTOP LOG · JOB #5063',out.width/2,src.height+38);
+    c.fillStyle='#5A7090';c.font='10px monospace';
+    c.fillText('frankbroughtonjr-cyber.github.io/Firestop-log-/',out.width/2,src.height+58);
+    const a=document.createElement('a');a.download='UPMC-5063-QR.png';a.href=out.toDataURL('image/png');a.click();
+  },300);
+});
+
+// ── FIRE ──────────────────────────────────────────────────────────────────
+const canvas=document.getElementById('fire');
+const ctx=canvas.getContext('2d');
+let W,H;
+function resize(){W=canvas.width=window.innerWidth;H=canvas.height=window.innerHeight;}
+resize();window.addEventListener('resize',resize);
+
+let fireStopped=false,extinguishing=false,extinguishProgress=0,T=0,lastFrame=0;
+const isMobile=/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+const FRAME_MS=1000/(isMobile?30:60);
+function rand(a,b){return a+Math.random()*(b-a);}
+
+const billows=[],sparks=[],fingers=[],tongues=[];
+const SEGS=14;
+
+function mkBillow(fe){
+  const x=fe?(Math.random()<.5?rand(-150,-20):rand(W+20,W+150)):rand(-100,W+100);
+  return{x,y:H+rand(20,80),vx:rand(-.18,.18),vy:rand(-.38,-.18),r:rand(110,220),life:1,decay:rand(.0018,.0038),phase:rand(0,Math.PI*2),wobble:rand(.006,.016),wobbleAmp:rand(8,22),layer:'fire'};
+}
+function mkSmoke(){return{x:rand(-60,W+60),y:H-rand(40,120),vx:rand(-.25,.25),vy:rand(-.28,-.10),r:rand(80,180),life:1,decay:rand(.0012,.003),phase:rand(0,Math.PI*2),wobble:rand(.004,.012),wobbleAmp:rand(12,30),layer:'smoke'};}
+function mkSpark(){return{x:rand(0,W),y:H,vx:rand(-1.2,1.2),vy:rand(-3.5,-1.4),life:1,decay:rand(.012,.028),size:rand(1.5,4)};}
+function mkTongue(){return{x:rand(0,W),y:H,vx:rand(-.3,.3),vy:rand(-2.8,-1.6),ax:rand(-.025,.025),life:1,decay:rand(.022,.038),size:rand(10,26),phase:rand(0,Math.PI*2)};}
+function mkFinger(){
+  const spine=[];for(let s=0;s<SEGS;s++)spine.push({ox:0,phase:rand(0,Math.PI*2)+s*.3});
+  return{x:rand(0,W),y:H,len:rand(160,320),life:1,decay:rand(.006,.013),w:rand(14,28),wobbleSpeed:rand(.012,.022),wobbleAmp:rand(20,45),leanDir:Math.random()<.5?1:-1,splitting:Math.random()<.45,blendBase:Math.random()<.5,spine};
+}
+for(let i=0;i<28;i++){const b=mkBillow(false);b.y=rand(H*.3,H);b.life=rand(.1,.95);billows.push(b);}
+for(let i=0;i<14;i++){const s=mkSmoke();s.y=rand(0,H*.5);s.life=rand(.1,.85);billows.push(s);}
+for(let i=0;i<60;i++){const sp=mkSpark();sp.y=rand(H*.5,H);sp.life=rand(.1,.9);sparks.push(sp);}
+for(let i=0;i<30;i++){const t=mkTongue();t.y=rand(H*.7,H);t.life=rand(.05,.9);tongues.push(t);}
+for(let i=0;i<22;i++){const f=mkFinger();f.life=rand(.15,.9);fingers.push(f);}
+
+function fireColor(l){const a=Math.pow(Math.min(1,l*1.5),.65);if(l>.7){const t=(l-.7)/.3;return[255,Math.round(160+80*t),Math.round(60*t),a];}if(l>.4){const t=(l-.4)/.3;return[255,Math.round(60+100*t),0,a];}if(l>.18){const t=(l-.18)/.22;return[Math.round(180+75*t),Math.round(20+40*t),0,a*.9];}return[Math.round(80+100*(l/.18)),0,0,a*.7];}
+function smokeColor(l){const v=Math.round(18+28*l);return[v,v,v,Math.pow(l,.7)*.55];}
+function sparkColor(l){if(l>.5)return[255,Math.round(200*l),0,l];return[255,Math.round(80*l),0,l*.8];}
+
+function loop(ts){
+  if(fireStopped){ctx.clearRect(0,0,W,H);return;}
+  if(ts-lastFrame<FRAME_MS){requestAnimationFrame(loop);return;}
+  lastFrame=ts;T=ts*.001;
+  ctx.clearRect(0,0,W,H);
+
+  if(extinguishing){
+    extinguishProgress=Math.min(1,extinguishProgress+.006);
+    const m=Math.max(0,1-extinguishProgress*2.2);
+    if(Math.random()<.35*m)billows.push(mkBillow(false));
+    if(Math.random()<.8*m)tongues.push(mkTongue());
+    if(Math.random()<.6*m)sparks.push(mkSpark());
+    if(Math.random()<.4*m)fingers.push(mkFinger());
+    const boost=extinguishProgress*.055;
+    billows.forEach(b=>{b.decay+=boost*.0015;b.vy-=.0008;});
+    tongues.forEach(p=>{p.decay+=boost*.003;});
+    sparks.forEach(s=>{s.decay+=boost*.003;});
+    fingers.forEach(f=>{f.decay+=boost*.004;});
+    if(extinguishProgress>=1&&!billows.length&&!tongues.length&&!fingers.length){stopFire();return;}
+  } else {
+    if(Math.random()<.35)billows.push(mkBillow(false));
+    if(Math.random()<.07)billows.push(mkSmoke());
+    if(Math.random()<.65)sparks.push(mkSpark());
+    if(Math.random()<.85)tongues.push(mkTongue());
+    if(Math.random()<.55)fingers.push(mkFinger());
+  }
+
+  // Billows
+  billows.sort((a,b)=>(a.layer==='smoke'?1:0)-(b.layer==='smoke'?1:0));
+  for(let i=billows.length-1;i>=0;i--){
+    const b=billows[i];
+    b.phase+=b.wobble;b.x+=b.vx+Math.sin(b.phase)*b.wobbleAmp*.01;b.y+=b.vy;b.r+=.06;b.life-=b.decay;
+    if(b.life<=0||b.y<-b.r*3){billows.splice(i,1);continue;}
+    const[r,g,bl,a]=b.layer==='smoke'?smokeColor(b.life):fireColor(b.life);
+    ctx.save();ctx.translate(b.x+Math.sin(b.phase)*5,b.y+Math.cos(b.phase*.6)*3);ctx.scale(.85,1.55);
+    const grd=ctx.createRadialGradient(0,b.r*.12,0,0,-b.r*.1,b.r);
+    if(b.layer==='fire'){grd.addColorStop(0,`rgba(${r},${g},${bl},${Math.min(1,a*1.8)})`);grd.addColorStop(.2,`rgba(${r},${Math.round(g*.8)},0,${a*1.3})`);grd.addColorStop(.45,`rgba(${Math.round(r*.85)},${Math.round(g*.25)},0,${a*.9})`);grd.addColorStop(.72,`rgba(${Math.round(r*.45)},0,0,${a*.45})`);grd.addColorStop(1,'rgba(0,0,0,0)');}
+    else{grd.addColorStop(0,`rgba(${r},${g},${bl},${a*.45})`);grd.addColorStop(.5,`rgba(${r},${g},${bl},${a*.25})`);grd.addColorStop(1,'rgba(0,0,0,0)');}
+    ctx.beginPath();ctx.arc(0,0,b.r,0,Math.PI*2);ctx.fillStyle=grd;ctx.fill();ctx.restore();
+  }
+
+  // Sparks
+  for(let i=sparks.length-1;i>=0;i--){
+    const sp=sparks[i];sp.x+=sp.vx;sp.y+=sp.vy;sp.vy+=.035;sp.vx*=.996;sp.life-=sp.decay;
+    if(sp.life<=0){sparks.splice(i,1);continue;}
+    const[r,g,b,a]=sparkColor(sp.life);
+    ctx.beginPath();ctx.moveTo(sp.x,sp.y);ctx.lineTo(sp.x-sp.vx*3.5,sp.y-sp.vy*3.5);
+    ctx.strokeStyle=`rgba(${r},${g},${b},${a})`;ctx.lineWidth=sp.size*sp.life;ctx.lineCap='round';ctx.stroke();
+  }
+
+  // Fingers
+  for(let i=fingers.length-1;i>=0;i--){
+    const f=fingers[i];f.life-=f.decay;if(f.life<=0){fingers.splice(i,1);continue;}
+    for(let s=0;s<SEGS;s++){const sp=f.spine[s];sp.phase+=f.wobbleSpeed;sp.ox=Math.sin(sp.phase)*f.wobbleAmp*Math.pow(s/(SEGS-1),1.4)*f.leanDir;}
+    const segH=f.len/(SEGS-1),alpha=Math.min(1,f.life*2.5)*.94;
+    const left=[],right=[];
+    for(let s=0;s<SEGS;s++){const t=s/(SEGS-1),taper=Math.pow(1-t,f.splitting?.28:.45),hw=f.w*(f.splitting?2.2:1)*taper*Math.min(1,f.life*2),jx=f.x+f.spine[s].ox,jy=f.y-s*segH;left.push({x:jx-hw,y:jy});right.push({x:jx+hw,y:jy});}
+    const tipX=f.x+f.spine[SEGS-1].ox,tipY=f.y-f.len;
+    ctx.save();ctx.beginPath();ctx.moveTo(left[0].x,left[0].y);
+    for(let s=1;s<SEGS;s++){const pv=left[s-1],cv=left[s];ctx.quadraticCurveTo(pv.x,pv.y,(pv.x+cv.x)/2,(pv.y+cv.y)/2);}
+    ctx.lineTo(tipX,tipY);
+    for(let s=SEGS-1;s>=1;s--){const pv=right[s],cv=right[s-1];ctx.quadraticCurveTo(pv.x,pv.y,(pv.x+cv.x)/2,(pv.y+cv.y)/2);}
+    ctx.closePath();
+    const fg=ctx.createLinearGradient(f.x,f.y,tipX,tipY);
+    if(f.blendBase)fg.addColorStop(0,'rgba(255,130,0,0)');
+    fg.addColorStop(f.blendBase?.18:0,`rgba(255,130,0,${alpha})`);fg.addColorStop(.4,`rgba(255,150,5,${alpha*.9})`);fg.addColorStop(.7,`rgba(220,55,0,${alpha*.55})`);fg.addColorStop(1,'rgba(160,15,0,0)');
+    ctx.fillStyle=fg;ctx.fill();ctx.restore();
+  }
+
+  // Tongues
+  for(let i=tongues.length-1;i>=0;i--){
+    const p=tongues[i];p.phase+=.11;p.vx+=p.ax+Math.sin(p.phase)*.035;p.x+=p.vx;p.y+=p.vy;p.vy-=.013;p.life-=p.decay;p.size*=.989;
+    if(p.life<=0||p.y<-p.size*2.5){tongues.splice(i,1);continue;}
+    const s=p.size,ta=Math.min(1,p.life*1.9)*.78;
+    ctx.save();ctx.translate(p.x,p.y);ctx.beginPath();ctx.moveTo(0,s*.85);ctx.bezierCurveTo(s*.52,s*.32,s*.22,-s*.65,0,-s*1.25);ctx.bezierCurveTo(-s*.22,-s*.65,-s*.52,s*.32,0,s*.85);ctx.closePath();
+    const tg=ctx.createRadialGradient(0,-s*.08,0,0,s*.25,s*1.15);
+    if(p.life>.5){tg.addColorStop(0,`rgba(255,248,190,${ta})`);tg.addColorStop(.28,`rgba(255,190,35,${ta*.95})`);tg.addColorStop(.6,`rgba(255,75,0,${ta*.65})`);tg.addColorStop(1,'rgba(160,15,0,0)');}
+    else{tg.addColorStop(0,`rgba(255,150,15,${ta})`);tg.addColorStop(.45,`rgba(210,40,0,${ta*.7})`);tg.addColorStop(1,'rgba(90,0,0,0)');}
+    ctx.fillStyle=tg;ctx.fill();ctx.restore();
+  }
+
+  // Ground lava
+  const glow=ctx.createLinearGradient(0,H-60,0,H);
+  glow.addColorStop(0,'rgba(255,80,0,0)');glow.addColorStop(.35,'rgba(255,50,0,0.55)');glow.addColorStop(.75,'rgba(210,15,0,0.85)');glow.addColorStop(1,'rgba(140,0,0,1)');
+  ctx.fillStyle=glow;ctx.fillRect(0,H-60,W,60);
+  const pulse=.28+.14*Math.sin(T*1.9);
+  const hb=ctx.createLinearGradient(0,H-10,0,H);hb.addColorStop(0,'rgba(255,130,0,0)');hb.addColorStop(1,`rgba(255,90,0,${pulse})`);
+  ctx.fillStyle=hb;ctx.fillRect(0,H-10,W,10);
+
+  requestAnimationFrame(loop);
+}
+
+function stopFire(){
+  fireStopped=true;extinguishing=false;ctx.clearRect(0,0,W,H);
+  tongues.length=0;sparks.length=0;billows.length=0;fingers.length=0;
+  // UI updates
+  const card=document.getElementById('card');
+  const btn=document.getElementById('fire-btn');
+  const st=document.getElementById('status-line');
+  const qrw=document.getElementById('qr-wrap');
+  const msg=document.getElementById('smoke-msg');
+  const flash=document.getElementById('douse-flash');
+
+  flash.style.background='rgba(180,230,255,0.35)';
+  setTimeout(()=>{flash.style.background='rgba(180,230,255,0)';},160);
+
+  card.classList.add('extinguished');
+  qrw.classList.add('doused');
+  btn.classList.add('doused');
+  btn.querySelector('.btn-icon').textContent='✅';
+  document.getElementById('btn-label').textContent='FIRE CONTAINED';
+  st.classList.remove('active');st.classList.add('done');
+  st.textContent='✅ Fire extinguished — scan QR code to open the log';
+
+  msg.style.transition='none';
+  msg.style.color='rgba(61,170,82,0)';
+  msg.style.transform='translate(-50%,-50%) scale(0.6)';
+  requestAnimationFrame(()=>{
+    msg.style.transition='color 0.3s,transform 0.4s cubic-bezier(0.175,0.885,0.32,1.275)';
+    msg.style.color='rgba(61,170,82,0.92)';
+    msg.style.transform='translate(-50%,-50%) scale(1)';
+    setTimeout(()=>{
+      msg.style.transition='color 0.9s,transform 0.9s';
+      msg.style.color='rgba(61,170,82,0)';
+      msg.style.transform='translate(-50%,-65%) scale(1.05)';
+    },1600);
+  });
+}
+
+function extinguishFire(){
+  if(extinguishing||fireStopped)return;
+  extinguishing=true;extinguishProgress=0;
+  const btn=document.getElementById('fire-btn');
+  const st=document.getElementById('status-line');
+  btn.style.opacity='.6';btn.style.pointerEvents='none';
+  st.textContent='⏳ Extinguishing...';
+}
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
